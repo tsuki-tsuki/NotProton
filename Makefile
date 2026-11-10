@@ -491,7 +491,7 @@ app-tests:
 	cd app && swift test --manifest-cache none --no-parallel
 
 PANEL_TESTS := dylib/tests/panel-behavior
-PANEL_SCRIPTS := behavior switching launch-options shell migration localization fex prefix-row live defaults
+PANEL_SCRIPTS := behavior configure switching launch-options shell migration localization fex prefix-row live defaults
 
 panel-behavior:
 	@if [ ! -d $(PANEL_TESTS) ]; then $(call SKIP,panel-behavior,$(PANEL_TESTS)); exit 0; fi; \

@@ -616,6 +616,7 @@ static int feat_rows(const char *home, char **ready_out, char **rows_out) {
              || np_conf_get(rec, "variants"))
             && !out_put(&rows, ",rn:1", 5)) goto done;
         if (np_conf_get(rec, "hide_crossover") && !out_put(&rows, ",hc:1", 5)) goto done;
+        if (np_conf_get(rec, "configure") && !out_put(&rows, ",cfg:1", 6)) goto done;
         if (type) {
             if (!out_put(&rows, ",ty:", 4) || !out_jsstr(&rows, type)) goto done;
         }
@@ -1412,6 +1413,14 @@ static int out_expand(np_out_t *o, const char *replace, const np_cap_t *caps) {
     ".MSCXBar>div{position:absolute;top:0;bottom:0;left:-30%;width:30%;background:#1a9fff;" \
     "animation:MSCXSlide 1.2s linear infinite}" \
     "@keyframes MSCXSlide{from{left:-30%}to{left:100%}}" \
+    ".MSCXPluginActions{display:flex;flex-direction:column;align-items:flex-start;gap:6px;margin-top:8px}" \
+    ".MSCXPluginActionLine{display:flex;flex-wrap:wrap;align-items:center;gap:8px}" \
+    ".MSCXPluginActionLine .MSCXBtn{box-sizing:border-box;min-height:32px;line-height:20px;white-space:nowrap}" \
+    ".MSCXConfig{width:min(480px,80vw);max-height:75vh;overflow:auto;padding:20px;border:0;border-radius:4px;" \
+    "background:#20252e;color:#dfe3e6;box-shadow:0 4px 24px rgba(0,0,0,.55)}" \
+    ".MSCXConfig::backdrop{background:rgba(0,0,0,.6)}" \
+    ".MSCXConfigText{max-width:100%;background:#141a22;color:inherit;border:1px solid #68727f;padding:6px 8px}" \
+    ".MSCXConfig h2{font-size:18px;margin:0 0 12px}.MSCXConfigActions{margin:12px 0 0}" \
     ".MSCXKeys{margin-top:5px;opacity:.75}\""
 
 #define NP_CX_BARREL(X) X(XY) X(m) X(Yh) X($n) X(Vb) X(D0) X(y4) X(J1) X(d3) X(gz)
@@ -1442,13 +1451,13 @@ static int out_expand(np_out_t *o, const char *replace, const np_cap_t *caps) {
     "return MSCXReady[k]!==0&&!(f&&f.va&&f.va.some(x=>!MSCXVar.some(v=>v.k===x&&v.t.indexOf(npTool)>=0)))}," \
     /* A toggle parent is satisfied by its on value; one that holds a value, such as a
        dropdown or a slider, by holding one at all rather than sitting on Default. */ \
-    "on1=(k,n=0)=>{const p=MSCXFeat.find(x=>x.k===k);" \
+    "on1=(k,n=0,root)=>{const p=MSCXFeat.find(x=>x.k===k);" \
     "return!!p&&n<32&&npRd(k)" \
-    "&&(p.ty?\"\"!==G(npKey(p)):ours?G(k)===p.on:npHas(p))" \
-    "&&(!p.dep||on1(p.dep,n+1))}," \
+    "&&(k===root||(p.ty?\"\"!==G(npKey(p)):ours?G(k)===p.on:npHas(p)))" \
+    "&&(k===root||!p.dep||on1(p.dep,n+1,root))}," \
     /* How deep the chain of parents runs, so a sub-option of a sub-option indents twice. */ \
-    "dl=(k,n)=>{const p=MSCXFeat.find(x=>x.k===k);" \
-    "return n<32&&p&&p.dep?dl(p.dep,n+1):n}," \
+    "dl=(k,n,root)=>{const p=MSCXFeat.find(x=>x.k===k);" \
+    "return n<32&&p&&p.dep&&k!==root?dl(p.dep,n+1,root):n}," \
     "vcur=G(\"NOTPROTON_RUNNER_VARIANT\").split(\"+\").filter(x=>x)," \
     "vav=dev&&npCx?MSCXVar.filter(v=>v.t.indexOf(tool)>=0&&(!v.ap||!app||" NP_CX_SHOW_ALL \
     "||v.ap.includes(String(app))||vcur.indexOf(v.k)>=0)):[]," \
@@ -1491,14 +1500,18 @@ static int out_expand(np_out_t *o, const char *replace, const np_cap_t *caps) {
     "indentLevel:lv||undefined," \
     "onChange:v=>s([[k,v?on:(off||\"\")]])},k)}," \
     /* A row that holds one of its declared values, with Default for none of them. */ \
-    "TC=(k,l,d,lv,ch,pe)=>{const rd=npRd(k),v=G(k);" \
+    "TC=(k,l,d,lv,ch,pe,modal)=>{const rd=npRd(k),v=G(k)," \
+    "label=rd?l:l+npL(\" (Not Installed)\",\" (未安装)\",\" (Not Installed)\")," \
+    "options=[{v:\"\",l:npL(\"Default\",\"默认\",\"Default\")},...ch]," \
+    "value=rd&&ch.some(c=>c.v===v)?v:\"\",set=v=>s([[k,v]],pe);" \
+    "if(modal)return(0," RT ".jsx)(" BARREL ".D0,{label,description:d||undefined,indentLevel:lv||undefined," \
+    "children:(0," RT ".jsx)(\"select\",{className:\"MSCXConfigText\",\"aria-label\":label," \
+    "disabled:!rd,value,onChange:e=>set(e.currentTarget.value)," \
+    "children:options.map(c=>(0," RT ".jsx)(\"option\",{value:c.v,children:c.l},c.v))})},k);" \
     "return(0," RT ".jsx)(" BARREL ".m," \
-    "{label:rd?l:l+npL(\" (Not Installed)\",\" (未安装)\",\" (Not Installed)\"),disabled:!rd," \
-    "description:d||undefined,layout:\"inline\"," \
-    "indentLevel:lv||undefined," \
-    "rgOptions:[{data:\"\",label:npL(\"Default\",\"默认\",\"Default\")}]" \
-    ".concat(ch.map(c=>({data:c.v,label:c.l})))," \
-    "selectedOption:rd&&ch.some(c=>c.v===v)?v:\"\",onChange:x=>s([[k,x.data]],pe)},k)}," \
+    "{label,disabled:!rd,description:d||undefined,layout:\"inline\"," \
+    "indentLevel:lv||undefined,rgOptions:options.map(c=>({data:c.v,label:c.l}))," \
+    "selectedOption:value,onChange:x=>set(x.data)},k)}," \
     /* The handle follows the drag on its own; only the finished value is written, and
        the declared default is written as no value at all so launch options stay clean. */ \
     "TS=(k,l,d,lv,mn,mx,st,df,sf,pe)=>{const rd=npRd(k),v=G(k)," \
@@ -1537,6 +1550,19 @@ static int out_expand(np_out_t *o, const char *replace, const np_cap_t *caps) {
     "br=SL(\"#AppProperties_Shortcut_BrowseFiles\",\"Browse...\")," \
     "XF=(k,l,d,c)=>(0," RT ".jsx)(" BARREL ".D0,{label:l,description:d,childrenContainerWidth:\"min\"," \
     "children:(0," RT ".jsx)(\"div\",{className:\"MSCXBtns\",children:c})},k)," \
+    "TT=(f,k,d,lv,pe)=>{const rd=npRd(f.k),v=G(k)," \
+    "l=rd?f.l:f.l+npL(\" (Not Installed)\",\" (未安装)\",\" (Not Installed)\");" \
+    "return(0," RT ".jsx)(" BARREL ".D0,{label:l,description:d||undefined,indentLevel:lv||undefined," \
+    "children:(0," RT ".jsx)(\"input\",{type:\"text\",className:\"MSCXConfigText\"," \
+    "\"aria-label\":l,disabled:!rd,defaultValue:v,maxLength:512," \
+    "onInput:e=>e.currentTarget.setCustomValidity(\"\")," \
+    "onKeyDown:e=>{if(e.key===\"Enter\"){e.preventDefault();e.currentTarget.blur()}}," \
+    "onBlur:e=>{const el=e.currentTarget,n=el.value," \
+    "bad=n.length>512||/[\\x00-\\x1f\\x7f]|%command%/i.test(n);" \
+    "el.setCustomValidity(bad?npL(\"Use one line without %command% (up to 512 characters).\"," \
+    "\"请输入一行，不含 %command%（最多 512 个字符）。\"," \
+    "\"Usa una riga senza %command% (massimo 512 caratteri).\"):\"\");" \
+    "if(bad){el.reportValidity();return}if(rd&&n!==v)s([[k,n]],pe)}},v)},f.k)}," \
     "exe=X&&(npCx||ex)&&(0," RT ".jsxs)(" BARREL ".XY,{label:npL(\"Launch Executable\",\"Launch Executable\",\"Launch Executable\"),children:[" \
     "XF(\"target\",npL(\"Executable\",\"Executable\",\"Executable\"),ex||undefined,[" \
     "ex&&bt(SL(\"#Button_Remove\",\"Remove\"),()=>X.write(\"\",\"\"),\"remove\")," \
@@ -1588,22 +1614,42 @@ static int out_expand(np_out_t *o, const char *replace, const np_cap_t *caps) {
        with nothing to deliver. */ \
     "const npRows=ours?MSCXFeat:MSCXFeat.filter(f=>!f.rn&&(f.ty" \
     "?/^NOTPROTON_ENV_/.test(f.k):f.rq||(f.ev||[]).length))," \
+    /* The descriptor opts a row into a modal. Its closest marked ancestor owns each \
+       setting, and dependencies below that ancestor are still evaluated normally. */ \
+    "npOwner=(f,n=0)=>{const p=n<32&&npRows.find(x=>x.k===f.dep);" \
+    "return!p?null:p.cfg?p.k:npOwner(p,n+1)}," \
+    "npFields=(root)=>npRows.filter(f=>npOwner(f)===root" \
+    "&&(!f.dep||on1(f.dep,0,root))).map(f=>npR(f,root))," \
     "npG=f=>f.gr||f.dep&&(npRows.find(x=>x.k===f.dep)||{}).gr||\"\"," \
     "npGs=[...new Set(npRows.map(npG).filter(Boolean))].sort((a,b)=>a.localeCompare(b))," \
-    "npIn=g=>npRows.filter(f=>npG(f)===g&&(!f.dep||on1(f.dep)))," \
+    "npIn=g=>npRows.filter(f=>npG(f)===g&&!npOwner(f)&&(!f.dep||on1(f.dep)))," \
     /* Lines a plugin only wants read once the row is on, such as the keys that
        change the rest of a feature in game, sit under its description while it is. */ \
-    "npR=f=>{const lv=f.dep?dl(f.dep,1):0," \
+    "npR=(f,root=null)=>{const lv=f.dep&&f.dep!==root?dl(f.dep,1,root):0," \
     "ln=on1(f.k)?(f.dn||[]).concat(npClash(f)||[]):[]," \
     "d=ln.length?(0," RT ".jsxs)(\"div\",{children:(f.d?[f.d]:[])" \
     ".concat(ln.map((x,i)=>(0," RT ".jsx)(\"div\"," \
     "{className:\"MSCXKeys\",children:x},i)))}):f.d;" \
     "const kk=npKey(f),pe=ours?0:1;" \
-    "return!ours&&!f.ty?TP(f,d,lv)" \
-    ":\"choice\"===f.ty?TC(kk,f.l,d,lv,f.ch,pe)" \
-    ":\"slider\"===f.ty?(f.ch?TL(kk,f.l,d,lv,f.ch,f.df,pe)" \
-    ":TS(kk,f.l,d,lv,f.mn,f.mx,f.st,f.df,f.sf,pe))" \
-    ":TD(f.k,f.l,f.on,f.off,d,lv)}," \
+    "const field=desc=>!ours&&!f.ty?TP(f,desc,lv)" \
+    ":\"text\"===f.ty?TT(f,kk,desc,lv,pe):\"choice\"===f.ty?TC(kk,f.l,desc,lv,f.ch,pe,root!==null)" \
+    ":\"slider\"===f.ty?(f.ch?TL(kk,f.l,desc,lv,f.ch,f.df,pe)" \
+    ":TS(kk,f.l,desc,lv,f.mn,f.mx,f.st,f.df,f.sf,pe))" \
+    ":TD(f.k,f.l,f.on,f.off,desc,lv);" \
+    "if(!f.cfg||!npRd(f.k)||!npRows.some(x=>npOwner(x)===f.k))return field(d);" \
+    "let modal;" \
+    "const body=(0," RT ".jsxs)(\"div\",{children:[d,(0," RT ".jsxs)(\"div\"," \
+    "{className:\"MSCXPluginActions\",onClick:e=>e.stopPropagation(),onKeyDown:e=>e.stopPropagation(),children:[" \
+    "(0," RT ".jsxs)(\"div\",{className:\"MSCXPluginActionLine\",children:[" \
+    "(0," RT ".jsx)(\"button\",{className:\"MSCXBtn\",type:\"button\"," \
+    "onClick:()=>{if(modal&&!modal.open)modal.showModal()}," \
+    "children:npL(\"Configure…\",\"配置…\",\"Configura…\")},\"configure\")" \
+    "]})]})]});" \
+    "return(0," RT ".jsxs)(" RT ".Fragment,{children:[field(body)," \
+    "(0," RT ".jsxs)(\"dialog\",{className:\"MSCXConfig\",\"aria-label\":f.l,ref:el=>{modal=el}," \
+    "children:[(0," RT ".jsx)(\"h2\",{children:f.l}),...npFields(f.k)," \
+    "(0," RT ".jsx)(\"div\",{className:\"MSCXConfigActions\",children:" \
+    "bt(npL(\"Done\",\"完成\",\"Fine\"),()=>modal?.close(),\"done\")})]})]},f.k)}," \
     "npX=npLv&&npLv.x&&app?npLv.x[String(app)]||[]:null," \
     "npChain=(f,n=0)=>{const p=f.dep&&npRows.find(x=>x.k===f.dep);" \
     "return p&&!p.ty&&n<32&&!on1(p.k)?npChain(p,n+1).concat([f]):[f]}," \
@@ -1694,9 +1740,9 @@ static int out_expand(np_out_t *o, const char *replace, const np_cap_t *caps) {
     "exe," \
     "dev&&(npIn(\"\").length||vids.length)?(0," RT ".jsx)(" BARREL ".J1,{children:(0," RT ".jsx)(" BARREL ".XY," \
     "{label:npL(\"Developer\",\"开发者\",\"Developer\")," \
-    "children:vids.map(V).concat(npIn(\"\").map(npR))})},\"dev\"):null," \
+    "children:vids.map(V).concat(npIn(\"\").map(f=>npR(f)))})},\"dev\"):null," \
     "dev&&npGs.length?npGs.map(g=>(0," RT ".jsx)(" BARREL ".J1,{children:(0," RT ".jsx)(" BARREL ".XY," \
-    "{label:g,children:npIn(g).map(npR)})},\"gr:\"+g)):null,npCx&&foot" \
+    "{label:g,children:npIn(g).map(f=>npR(f))})},\"gr:\"+g)):null,npCx&&foot" \
     "].filter(Boolean);" \
     /* A tool of someone else's with nothing of ours to offer gets no page at all. */ \
     "if(!npBody.length)return null;" \
