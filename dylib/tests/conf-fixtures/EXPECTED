@@ -61,6 +61,10 @@ NOTPROTON_SPACED	env	PATH_LIKE=a=b=c
 NOTPROTON_PICKY	label	Picky
 NOTPROTON_PICKY	tools	notproton-fex*
 NOTPROTON_PICKY	tools	notproton-26.3
+NOTPROTON_PICKY	configure	1
+NOTPROTON_TEXT	label	Text
+NOTPROTON_TEXT	depends	NOTPROTON_PICKY
+NOTPROTON_TEXT	type	text
 
 # A "*" anywhere but the end would mean one thing to the panel's startsWith and another
 # to the run script's case pattern, so it is refused rather than left to disagree.
@@ -91,6 +95,8 @@ NOTPROTON_AFTER_EMPTY	label	After
 !	NOTPROTON_BADENV	bad-value:env
 !	NOTPROTON_TABBED	tab-in-value:description
 !	NOTPROTON_BADTOOL	bad-value:tools
+!	NOTPROTON_BADCONFIGURE	bad-value:configure
+!	NOTPROTON_BADTEXT	bad-value:type
 
 == plugins/75-value-faults.conf
 !	NOTPROTON_BAD_DEPENDS	bad-value:depends

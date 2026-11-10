@@ -21,7 +21,8 @@ static const np_conf_spec_t kPlugin[] = {
     { "tools", 8, 0 },     { "type", 1, 0 },        { "choice", 16, 0 },
     { "min", 1, 0 },
     { "max", 1, 0 },       { "step", 1, 0 },        { "default", 1, 0 },
-    { "suffix", 1, 0 },    { NULL, 0, 0 }
+    { "suffix", 1, 0 },    { "configure", 1, 0 },
+    { NULL, 0, 0 }
 };
 
 // label and variant fall back to the record's id, so a variant that is the only one in
@@ -212,6 +213,10 @@ static const char *conf_schema(const np_conf_rec_t *rec, np_conf_kind kind,
     }
 
     while (np_conf_next(rec, &it, &n, &v)) {
+        if (strcmp(n, "configure") == 0 && strcmp(v, "1") != 0) {
+            *detail = "configure";
+            return NP_CONF_BAD_VALUE;
+        }
         if (strcmp(n, "env") == 0 && !conf_env_ok(v)) {
             *detail = "env";
             return NP_CONF_BAD_VALUE;
@@ -245,6 +250,13 @@ static const char *conf_schema(const np_conf_rec_t *rec, np_conf_kind kind,
     step = np_conf_get(rec, "step");
     dflt = np_conf_get(rec, "default");
 
+    if (strcmp(type, "text") == 0) {
+        if (values || mn || mx || step || dflt || np_conf_get(rec, "suffix")) {
+            *detail = "type";
+            return NP_CONF_BAD_VALUE;
+        }
+        return NULL;
+    }
     if (strcmp(type, "choice") == 0) {
         if (!values) {
             *detail = "choice";

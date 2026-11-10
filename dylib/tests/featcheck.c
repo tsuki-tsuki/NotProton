@@ -255,6 +255,16 @@ int main(void) {
     ok(strstr(feats_json(), "on:\"0123456789012345678901234567890123\"") != NULL,
        "keeps a long on value intact");
 
+    puts("== a Configure group with a text row");
+    clear_descs();
+    write_desc("10-configure.conf", "[NOTPROTON_GROUP]\nlabel = Group\nconfigure = 1\n"
+               "[NOTPROTON_NOTE]\nlabel = Note\ndepends = NOTPROTON_GROUP\ntype = text\n");
+    {
+        const char *j = feats_json();
+        ok(strstr(j, "cfg:1") != NULL && strstr(j, ",ty:\"text\"") != NULL,
+           "passes the Configure flag and text type to the panel");
+    }
+
     puts("== a choice row");
     clear_descs();
     write_desc("10-ch.conf",

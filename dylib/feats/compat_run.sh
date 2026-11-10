@@ -386,6 +386,7 @@ NP_CONF_NAMES
       return ""
     }
     for (i = 1; i <= nkv; i++) {
+      if (names[i] == "configure" && vals[i] != "1") { detail = "configure"; return "bad-value" }
       if (names[i] == "env" && !envok(vals[i])) { detail = "env"; return "bad-value" }
       if (names[i] == "choice" && choiceval(vals[i]) == "") { detail = "choice"; return "bad-value" }
       if (names[i] == "tools" && !toolok(vals[i])) { detail = "tools"; return "bad-value" }
@@ -396,6 +397,10 @@ NP_CONF_NAMES
     t = first["type"]
     values = ("choice" in cnt) ? cnt["choice"] : 0
     mn = ("min" in cnt); mx = ("max" in cnt); st = ("step" in cnt); df = ("default" in cnt)
+    if (t == "text") {
+      if (values || mn || mx || st || df || ("suffix" in cnt)) { detail = "type"; return "bad-value" }
+      return ""
+    }
     if (t == "choice") {
       if (!values) { detail = "choice"; return "missing-required" }
       return ""
@@ -444,8 +449,8 @@ NP_CONF_NAMES
   BEGIN {
     nkv = 0; records = 0; id = ""; code = ""; detail = ""
     if (kind == "plugin") {
-      split("label description description_on section on off depends requires inject env overrides stage tools type choice min max step default suffix", f, " ")
-      split("1 1 16 1 1 1 1 4 1 16 1 1 8 1 16 1 1 1 1 1", m, " ")
+      split("label description description_on section on off depends requires inject env overrides stage tools type choice min max step default suffix configure", f, " ")
+      split("1 1 16 1 1 1 1 4 1 16 1 1 8 1 16 1 1 1 1 1 1", m, " ")
       split("label", req, " "); nreq = 1
     } else {
       split("label variant src dst build remove", f, " ")

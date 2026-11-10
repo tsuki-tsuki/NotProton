@@ -498,6 +498,7 @@ panel-behavior:
 	$(TEST_CC) -O1 -o $(OUT_DIR)/panel-emit \
 	  $(PANEL_TESTS)/emit.c dylib/feats/conf.c dylib/util/file.c && \
 	node $(PANEL_TESTS)/behavior.js $(OUT_DIR)/panel-emit && \
+	node $(PANEL_TESTS)/configure.js $(OUT_DIR)/panel-emit && \
 	node $(PANEL_TESTS)/switching.js $(OUT_DIR)/panel-emit && \
 	node $(PANEL_TESTS)/launch-options.js $(OUT_DIR)/panel-emit && \
 	node $(PANEL_TESTS)/shell.js $(OUT_DIR)/panel-emit && \

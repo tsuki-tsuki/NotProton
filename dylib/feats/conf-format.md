@@ -81,7 +81,8 @@ in both directories.
 | `overrides` | once | | appended to `WINEDLLOVERRIDES` |
 | `stage` | once | | a folder whose files are copied into the prefix's `system32` |
 | `tools` | append, max 8 | | a compatibility tool this row is for, as a name or a name ending in one `*`. Naming none means every tool |
-| `type` | once | | `choice` or `slider`; a toggle without one |
+| `configure` | once | | `1` groups dependent settings behind a Configure button |
+| `type` | once | | `choice`, `slider` or `text`; a toggle without one |
 | `choice` | append, max 16 | | `<value> = <label>`, split at the first `=`; the label defaults to the value |
 | `min`, `max` | once | for a range slider | numbers, `max` the larger |
 | `step` | once | | a number above zero |
@@ -94,12 +95,42 @@ in both directories.
 | --- | --- | --- |
 | *(none)* | | a toggle writing `on` or `off` |
 | `choice` | at least one `choice` | a dropdown of Default plus each value |
+| `text` | no choice or slider fields | a single-line non-secret value, saved on leaving the field |
 | `slider` | `min` and `max`, and no `choice` | a slider over that range |
 | `slider` | at least two `choice`, and no `min`/`max` | a slider snapping to those values, a labelled tick each |
 
 A row with a `type` is on while it holds a value. On Default, which for a slider is its
 `default`, it writes nothing, so its `inject`, `env`, `stage` and `overrides` do not apply
 and the rows that depend on it are hidden.
+
+### Configure dialog
+
+Add `configure = 1` to a plugin row and use `depends` on its settings. The row
+keeps its own control on the Compatibility page. Its dependent toggles, choices,
+sliders and text fields move into **Configure…** in descriptor order. A setting
+belongs to its closest ancestor with `configure = 1`. The dialog opens even when its plugin
+is off, so users can set values before enabling it. Dependencies between settings
+inside the dialog still apply.
+
+For example:
+
+    [NOTPROTON_HUD]
+    label = HUD
+    configure = 1
+
+    [NOTPROTON_ENV_HUD_POSITION]
+    label = HUD position
+    depends = NOTPROTON_HUD
+    type = choice
+    choice = tl = Top left
+    choice = tr = Top right
+
+Changes apply immediately through the same per-game Steam launch options as
+inline controls. Close the dialog with **Done** or Escape. The launcher still
+uses the descriptor's existing dependency rules. Text fields allow at most 512
+characters without control characters or the Steam `%command%` placeholder. An empty field removes its launch option.
+These values are visible in Steam's Launch Options. Use them for non-secret
+settings such as a label or public URL.
 
 ## Variant fields
 
