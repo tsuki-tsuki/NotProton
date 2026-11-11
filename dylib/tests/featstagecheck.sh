@@ -329,5 +329,39 @@ dyld=$(env -i HOME="$work" NOTPROTON_FEATURE_DYLIBS=/f.dylib \
   sh -c 'eval "$1"; printf "%s|%s" "$DYLD_INSERT_LIBRARIES" "${NOTPROTON_OVERLAY_SHIM:+shim}"' sh "$inject")
 ok "plugin dylibs load without the overlay shim" "$dyld" "/f.dylib|"
 
+reset
+conf 50-global.conf <<'EOF'
+[NOTPROTON_GLOBAL_TEST]
+label = Global
+on = yes
+env = TEST_GLOBAL=enabled
+
+[NOTPROTON_GLOBAL_DEPENDENT]
+label = Dependent
+depends = NOTPROTON_GLOBAL_TEST
+env = TEST_DEPENDENT=enabled
+
+[NOTPROTON_GLOBAL_TYPED]
+label = Typed
+type = choice
+choice = a = Choice
+env = TEST_TYPED=enabled
+EOF
+defaults="$work/Library/Application Support/notproton/defaults-plugins"
+printf '%s\n' 'NOTPROTON_GLOBAL_TEST=1' 'NOTPROTON_GLOBAL_TYPED=1' 'NOTPROTON_GLOBAL_DEPENDENT=1' > "$defaults"
+out=$(run)
+ok "a globally enabled toggle applies without a game override" "$(line "$out" 3)" "TEST_GLOBAL=enabled"
+ok "sub-options and typed plugins do not inherit a global enable default" "$(line "$out" 4)" ""
+out=$(run NOTPROTON_GLOBAL_TEST=0)
+ok "a per-game Off defeats a global plugin default" "$(line "$out" 3)" ""
+out=$(run NOTPROTON_GLOBAL_TEST=yes)
+ok "an explicit on value still works" "$(line "$out" 3)" "TEST_GLOBAL=enabled"
+printf '%s\n' 'NOTPROTON_GLOBAL_TEST=1' 'INVALID=1' > "$defaults"
+out=$(run)
+ok "a malformed defaults file does not enable a plugin" "$(line "$out" 3)" ""
+rm -f "$defaults"
+out=$(run)
+ok "removing the global default leaves an unconfigured plugin off" "$(line "$out" 3)" ""
+
 [ "$fail" -eq 0 ] || exit 1
 echo "==> featstagecheck: plugins stage into the prefix and extend the overrides"

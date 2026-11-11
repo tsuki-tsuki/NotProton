@@ -9,6 +9,7 @@
 #define NP_DEFAULTS_FEX     1
 
 #define NP_DEFAULTS_TEXT_MAX   1024
+#define NP_PLUGIN_DEFAULTS_TEXT_MAX 8192
 
 int np_defaults_save(uint32_t runner, const char *text);
 
@@ -22,5 +23,9 @@ int np_defaults_read(uint32_t runner, char *out, size_t size);
 
 // Returns 0 if the version has no settings of its own, -1 if they can't be read.
 int np_defaults_read_build(const char *build, uint32_t runner, char *out, size_t size);
+
+// Shared enable defaults for plugin toggles. The file holds one ID=1 per line.
+int np_defaults_save_plugins(const char *text);
+int np_defaults_read_plugins(char *out, size_t size);
 
 #endif // NOTPROTON_FEATS_DEFAULTS_H

@@ -48,16 +48,17 @@
 // Stands for the runner variants read from the support directory.
 #define NP_VARS "\033"
 #define NP_OUR_TOOLS "\034"
+#define NP_PLUGIN_DEFAULTS "\035"
 
 #define NP_TOOL_NAME_MAX 128
 
 #define NP_UNREAD_DEFAULTS "{rosetta:null,fex:null}"
 
 enum { IN_FALLBACK_TOOL, IN_FEX_TOOLS, IN_DEFAULTS, IN_BUILDS, IN_READY, IN_FEATS, IN_VARS,
-       IN_OUR_TOOLS, IN_COUNT };
+       IN_OUR_TOOLS, IN_PLUGIN_DEFAULTS, IN_COUNT };
 typedef struct { char *text[IN_COUNT]; } np_inputs_t;
 static const char *const g_unset[IN_COUNT] = { "", "[]", NP_UNREAD_DEFAULTS, "[]", "{}", "[]", "[]",
-                                               "[]" };
+                                               "[]", "null" };
 static pthread_key_t g_inputs_key;
 static pthread_once_t g_inputs_once = PTHREAD_ONCE_INIT;
 
@@ -214,6 +215,12 @@ void np_webpatch_set_defaults(const char *rosetta, const char *fex) {
     set_input(IN_DEFAULTS, js_done(&j));
 }
 
+void np_webpatch_set_plugin_defaults(const char *plugins) {
+    np_js_t j = js_alloc(8 + 3 * strlen(plugins ? plugins : ""));
+    js_settings(&j, plugins);
+    set_input(IN_PLUGIN_DEFAULTS, js_done(&j));
+}
+
 static int is_label(const char *str) {
     if (!str || !*str) return 0;
     for (; *str; str++)
@@ -311,6 +318,7 @@ static const char *marker_text(char c) {
     if (c == NP_DEFAULTS[0]) return input_text(IN_DEFAULTS);
     if (c == NP_BUILDS[0]) return input_text(IN_BUILDS);
     if (c == NP_OUR_TOOLS[0]) return input_text(IN_OUR_TOOLS);
+    if (c == NP_PLUGIN_DEFAULTS[0]) return input_text(IN_PLUGIN_DEFAULTS);
     if (c == NP_READY[0] || c == NP_FEATS[0]) {
         if (!g_feat_ready_done) feat_build();
         return input_text(c == NP_READY[0] ? IN_READY : IN_FEATS);
@@ -1225,20 +1233,24 @@ static int out_expand(np_out_t *o, const char *replace, const np_cap_t *caps) {
 #define NP_CX_BUILDS "(globalThis.MSCXBuilds||(globalThis.MSCXBuilds=" NP_BUILDS "))"
 
 // FEX runs arm64 Wine, which has no D3DMetal and never runs under Rosetta.
+#define NP_CX_PLUGIN_DEFAULTS "(globalThis.MSCXPluginDefaultsData||(globalThis.MSCXPluginDefaultsData=" NP_PLUGIN_DEFAULTS "))"
+
 #define NP_CX_PANEL(RT, BARREL) \
-    "({fex,get:G,saved:readSaved,set:s,clearUnused,head,dflt,dev,tool,ours=1,target:X})=>{" \
+    "({fex,get:G,saved:readSaved,hasSaved,set:s,clearUnused,head,dflt,dev,tool,ours=1,target:X})=>{" \
     "const npZh=" NP_WEB_IS_ZH ",npIt=" NP_WEB_IS_IT ",npL=(en,zh,it)=>npZh?zh:npIt?it:en," \
     /* A plugin may name the tools it is for. Filtered here rather than at render, so the
        dependency chain and the indent depth see what the panel shows and nothing else. */ \
     "npTool=tool||\"\"," \
     "npFor=p=>\"*\"===p.slice(-1)?npTool.startsWith(p.slice(0,-1)):p===npTool," \
     "MSCXReady=" NP_READY ",MSCXFeat=(" NP_FEATS ").filter(f=>!f.tl||f.tl.some(npFor))," \
-    "npCx=ours&&!MSCXFeat.some(f=>f.hc),MSCXVar=" NP_VARS "," \
+    "npCx=ours&&!MSCXFeat.some(f=>f.hc),MSCXVar=" NP_VARS ",PG=" NP_CX_PLUGIN_DEFAULTS "," \
+    "pluginGlobal=f=>!f.dep&&PG?.[f.k]===\"1\"," \
+    "pv=f=>hasSaved(f.k)?readSaved(f.k):pluginGlobal(f)?f.on:G(f.k)," \
     /* A toggle parent is satisfied by its on value; one that holds a value, such as a
        dropdown or a slider, by holding one at all rather than sitting on Default. */ \
     "on1=(k,n=0)=>{const p=MSCXFeat.find(x=>x.k===k);" \
     "return!!p&&n<32&&MSCXReady[k]!==0" \
-    "&&(p.ty?\"\"!==G(npKey(p)):ours?G(k)===p.on:npHas(p))" \
+    "&&(p.ty?\"\"!==G(npKey(p)):ours?pv(p)===p.on:npHas(p))" \
     "&&(!p.dep||on1(p.dep,n+1))}," \
     /* How deep the chain of parents runs, so a sub-option of a sub-option indents twice. */ \
     "dl=(k,n)=>{const p=MSCXFeat.find(x=>x.k===k);" \
@@ -1274,12 +1286,16 @@ static int out_expand(np_out_t *o, const char *replace, const np_cap_t *caps) {
     "description:d||undefined,checked:rd&&npHas(f)," \
     "indentLevel:lv||undefined," \
     "onChange:v=>npSet(f,v)},f.k)}," \
-    "TD=(k,l,on,off,d,lv)=>{const rd=MSCXReady[k]!==0;" \
-    "return(0," RT ".jsx)(" BARREL ".y4," \
-    "{label:rd?l:l+npL(\" (Not Installed)\",\" (未安装)\",\" (Not Installed)\"),disabled:!rd," \
-    "description:d||undefined,checked:rd&&G(k)===on," \
-    "indentLevel:lv||undefined," \
-    "onChange:v=>s([[k,v?on:(off||\"\")]])},k)}," \
+    "TD=(f,d,lv)=>{const {k,l,on,off}=f,rd=MSCXReady[k]!==0," \
+    "label=rd?l:l+npL(\" (Not Installed)\",\" (未安装)\",\" (Not Installed)\")," \
+    "description=d||undefined,indentLevel=lv||undefined;" \
+    "if(pluginGlobal(f)){const v=readSaved(k),disable=off&&off!==on?off:on===\"0\"?\"1\":\"0\";" \
+    "return(0," RT ".jsx)(" BARREL ".m,{label,description,indentLevel,disabled:!rd,layout:\"inline\"," \
+    "rgOptions:[{data:\"\",label:npL(\"Use global default (On)\",\"使用全局默认（开启）\",\"Usa predefinita globale (Attivo)\")}," \
+    "{data:\"on\",label:npL(\"On\",\"开启\",\"Attivo\")},{data:\"off\",label:npL(\"Off\",\"关闭\",\"Disattivato\")}]," \
+    "selectedOption:hasSaved(k)?v===on?\"on\":\"off\":\"\",onChange:x=>s([[k,x.data===\"on\"?on:x.data===\"off\"?disable:\"\"]])},k)}" \
+    "return(0," RT ".jsx)(" BARREL ".y4,{label,description,indentLevel,disabled:!rd," \
+    "checked:rd&&pv(f)===on,onChange:v=>s([[k,v?on:(off||\"\")]])},k)}," \
     /* A row that holds one of its declared values, with Default for none of them. */ \
     "TC=(k,l,d,lv,ch,pe)=>{const rd=MSCXReady[k]!==0,v=G(k);" \
     "return(0," RT ".jsx)(" BARREL ".m," \
@@ -1435,7 +1451,7 @@ static int out_expand(np_out_t *o, const char *replace, const np_cap_t *caps) {
     ":\"choice\"===f.ty?TC(kk,f.l,d,lv,f.ch,pe)" \
     ":\"slider\"===f.ty?(f.ch?TL(kk,f.l,d,lv,f.ch,f.df,pe)" \
     ":TS(kk,f.l,d,lv,f.mn,f.mx,f.st,f.df,f.sf,pe))" \
-    ":TD(f.k,f.l,f.on,f.off,d,lv)}))})},\"dev\"):null" \
+    ":TD(f,d,lv)}))})},\"dev\"):null" \
     "].filter(Boolean);" \
     /* A tool of someone else's with nothing of ours to offer gets no page at all. */ \
     "if(!npBody.length)return null;" \
@@ -1457,7 +1473,7 @@ static int out_expand(np_out_t *o, const char *replace, const np_cap_t *caps) {
     "G=k=>\"DXMT_CONFIG\"===k?mergedDxmt:has(k)?g(k):DF[k]||\"\";" \
     "if(t.unAppID<2147483648&&(t.vecPlatforms||[]).indexOf(\"osx\")>=0" \
     "&&!t.strCompatToolName)return null;" \
-    "return MSCXPanel({fex,get:G,saved:g,set:L.s,clearUnused:1,dev:1,tool:tn," \
+    "return MSCXPanel({fex,get:G,saved:g,hasSaved:has,set:L.s,clearUnused:1,dev:1,tool:tn," \
     "ours:tn===\"" NP_FALLBACK_TOOL "\"||!!ot," \
     "dflt:lost?null:k=>DF[k],target:(" NP_CX_TARGET ")(o,t.unAppID,t.strInstallFolder||\"\"),head:" \
     "typeof MSCXPrefixRow==\"function\"&&(0," RT ".jsx)(\"div\",{className:\"MSCXRow\",ref:e=>e&&MSCXPrefixRow(e,t.unAppID)},\"npstate\")" \
@@ -1482,6 +1498,10 @@ static int out_expand(np_out_t *o, const char *replace, const np_cap_t *caps) {
     ":send(\"NotProton.SetDefaults#1\",rv,ser(d))).then(x=>done(x,()=>{c?c.override=d:all[nn]=d}))," \
     "s=ps=>{const rv=r,nn=n,c=b;clr();q(()=>{const d=Object.assign({},set(nn,c));" \
     "ps.forEach(p=>{p[1]&&\"auto\"!==p[1]?d[p[0]]=p[1]:delete d[p[0]]});return put(rv,nn,c,d)})}," \
+    "PG=" NP_CX_PLUGIN_DEFAULTS ",PR=" NP_READY ",PF=(" NP_FEATS ").filter(f=>!f.ty&&!f.dep)," \
+    "togglePlugin=(k,on)=>q(()=>{const next=Object.assign({},PG);on?next[k]=\"1\":delete next[k];" \
+    "return send(\"NotProton.SetPluginDefaults#1\",0,ser(next)).then(x=>done(x,()=>{" \
+    "on?PG[k]=\"1\":delete PG[k]}))})," \
     "kind=only===n?\"CrossOver\":fex?\"FEX\":\"Rosetta\"," \
     "apply=()=>{const nn=n,c=b,kk=kind;clr();const my=gen;" \
     "q(()=>{const d=Object.assign({},c.override||all[nn]||{});" \
@@ -1496,13 +1516,17 @@ static int out_expand(np_out_t *o, const char *replace, const np_cap_t *caps) {
     "onClick:f,children:t})},k);" \
     "eff(()=>{const on=e=>pickTool(e.detail);globalThis.addEventListener?.(\"mscxdefaulttool\",on);" \
     "return()=>globalThis.removeEventListener?.(\"mscxdefaulttool\",on)},[]);if(lost)return null;" \
-    "return MSCXPanel({fex,get:G,saved:G,set:s,head:(0," RT ".jsxs)(" BARREL ".XY,{label:" NP_WEB_TEXT("Default Compatibility Settings", "Default Compatibility Settings", "Impostazioni di compatibilit\\u00e0 predefinite") ",children:[" \
+    "return MSCXPanel({fex,get:G,saved:G,hasSaved:k=>!!DF[k],set:s,head:(0," RT ".jsxs)(" RT ".Fragment,{children:[" \
+    "PG&&PF.length?(0," RT ".jsx)(" BARREL ".J1,{children:(0," RT ".jsx)(" BARREL ".XY,{label:" NP_WEB_TEXT("Global Plugin Defaults", "全局插件默认设置", "Impostazioni globali dei plugin") "," \
+    "children:PF.map(f=>(0," RT ".jsx)(" BARREL ".y4,{label:f.l,description:f.d||undefined," \
+    "disabled:PR[f.k]===0&&PG[f.k]!==\"1\",checked:PG[f.k]===\"1\",onChange:v=>togglePlugin(f.k,v)},f.k))})},\"plugins\"):null," \
+    "(0," RT ".jsxs)(" BARREL ".XY,{label:" NP_WEB_TEXT("Default Compatibility Settings", "Default Compatibility Settings", "Impostazioni di compatibilit\\u00e0 predefinite") ",children:[" \
     "BL.length?(0," RT ".jsx)(" BARREL ".Vb,{label:" NP_WEB_TEXT("CrossOver version", "CrossOver version", "Versione di CrossOver") "," \
     "bMatchWidth:!1,rgOptions:BL.map(x=>({data:x.id,label:x.label}))," \
     "selectedOption:b?b.id:\"\",onChange:v=>{const p=BL.find(x=>x.id===v.data);if(!p)return;" \
     "si(p.id);sr(p.runner===\"fex\"?1:0);clr()}},\"version\"):null," \
     "b?btn(\"apply\",(" NP_WEB_IS_IT "?\"Applica come predefinite a tutti gli strumenti di compatibilit\\u00e0 \"+kind:\"Apply as defaults for all \"+kind+\" Compatibility Tools\")," NP_WEB_TEXT("Apply", "Apply", "Applica") ",apply,ok||void 0):null" \
-    "]},\"defaults\")})};" \
+    "]},\"defaults\")]})})};" \
     "return()=>{const up=typeof globalThis.MSCXUseState==\"function\"&&typeof globalThis.MSCXUseEffect==\"function\"" \
     "&&typeof globalThis.MSCXSpecifyRoute==\"function\";" \
 "const dd=" NP_CX_DEFAULTS ";if(null===dd.rosetta||null===dd.fex){" \

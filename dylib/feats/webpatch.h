@@ -23,6 +23,7 @@ void np_webpatch_set_tool_builds(const char *const *names, const char *const *bu
 
 // NULL for a runner whose file couldn't be read, which hides the page.
 void np_webpatch_set_defaults(const char *rosetta, const char *fex);
+void np_webpatch_set_plugin_defaults(const char *plugins);
 
 #define NP_WEBPATCH_BUILDS_MAX 32
 
