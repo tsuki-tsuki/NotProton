@@ -151,6 +151,8 @@ int np_defaults_save(uint32_t runner, const char *text) {
     return save_ok;
 }
 
+int np_defaults_save_plugins(const char *text) { return text != NULL; }
+
 int np_defaults_save_build(const char *build, uint32_t runner, const char *text) {
     saved_runner = runner;
     saved_text = text;

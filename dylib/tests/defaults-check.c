@@ -238,6 +238,26 @@ static void read_cases(void) {
     drop_file("defaults-fex");
 }
 
+static void plugin_cases(void) {
+    char text[NP_PLUGIN_DEFAULTS_TEXT_MAX + 1];
+    check(np_defaults_read_plugins(text, sizeof text) && !text[0],
+          "a missing plugin defaults file reads as no enabled plugins");
+    check(np_defaults_save_plugins("NOTPROTON_HUD=1\nNOTPROTON_CAPTURE=1") &&
+          np_defaults_read_plugins(text, sizeof text) &&
+          !strcmp(text, "NOTPROTON_HUD=1\nNOTPROTON_CAPTURE=1\n"),
+          "global plugin enables persist independently of runner defaults");
+    check(!np_defaults_save_plugins("NOTPROTON_HUD=1\nNOTPROTON_X=$(touch x)") &&
+          np_defaults_read_plugins(text, sizeof text) &&
+          !strcmp(text, "NOTPROTON_HUD=1\nNOTPROTON_CAPTURE=1\n"),
+          "invalid changes leave the prior plugin defaults intact");
+    put_file("defaults-plugins", "NOTPROTON_HUD=1\nINVALID=1\n");
+    check(!np_defaults_read_plugins(text, sizeof text) && !text[0],
+          "a malformed file contributes no plugin defaults");
+    check(np_defaults_save_plugins("") && np_defaults_read_plugins(text, sizeof text) && !text[0],
+          "clearing every plugin removes all global enables");
+    drop_file("defaults-plugins");
+}
+
 static void apply_cases(void) {
     put_file("defaults-rosetta", "WINEMSYNC=0\n");
     put_file("defaults-override-26.1-rosetta", "MTL_HUD_ENABLED=1\nNOTPROTON_RETINA=1\n");
@@ -350,6 +370,7 @@ int main(int argc, char **argv) {
     valid_cases();
     save_cases();
     read_cases();
+    plugin_cases();
     build_cases();
     planted_cases();
     apply_cases();

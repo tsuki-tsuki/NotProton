@@ -51,6 +51,8 @@ void np_webpatch_set_defaults(const char *rosetta, const char *fex) {
     snprintf(g_pub_fex, sizeof g_pub_fex, "%s", fex ? fex : "");
 }
 
+void np_webpatch_set_plugin_defaults(const char *plugins) { (void)plugins; }
+
 static np_webpatch_build_t g_pub[4];
 static char g_pub_override[4][NP_DEFAULTS_TEXT_MAX + 1];
 static size_t g_pub_count;

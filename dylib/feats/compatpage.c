@@ -29,6 +29,9 @@ static void publish_defaults(void) {
     }
     if (read) np_webpatch_set_defaults(rosetta, fex);
     else np_webpatch_set_defaults(NULL, NULL);
+    char plugins[NP_PLUGIN_DEFAULTS_TEXT_MAX + 1];
+    int plugins_read = np_defaults_read_plugins(plugins, sizeof plugins);
+    np_webpatch_set_plugin_defaults(plugins_read ? plugins : NULL);
     np_webpatch_set_builds(builds, n);
     free(own);
 }

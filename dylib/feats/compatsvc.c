@@ -32,6 +32,7 @@
 #define ROUTE_REBUILD              "NotProton.RebuildPrefix#1"
 #define ROUTE_BACKUP_REBUILD       "NotProton.BackupAndRebuildPrefix#1"
 #define ROUTE_OPEN_LOG             "NotProton.OpenPrefixLog#1"
+#define ROUTE_SET_PLUGIN_DEFAULTS  "NotProton.SetPluginDefaults#1"
 #define ROUTE_SET_DEFAULTS         "NotProton.SetDefaults#1"
 #define ROUTE_SET_TOOL_DEFAULTS    "NotProton.SetToolDefaults#1"
 #define ROUTE_APPLY_TOOL_DEFAULTS  "NotProton.ApplyToolDefaults#1"
@@ -487,6 +488,12 @@ static int set_defaults(uintptr_t request, uintptr_t response) {
         ? RESULT_OK : RESULT_FAIL;
 }
 
+static int set_plugin_defaults(uintptr_t request, uintptr_t response) {
+    (void)response;
+    return np_defaults_save_plugins(string_field(request + SPECIFY_TOOL_NAME_OFF))
+        ? RESULT_OK : RESULT_FAIL;
+}
+
 static int tool_build(const char *tool, size_t n, char *build, size_t size, uint32_t *runner) {
     np_compat_tool_info_t info;
     if (np_compat_tool_by_name(tool, n, &info) && info.build && strlen(info.build) < size) {
@@ -566,6 +573,10 @@ void np_compatsvc_register(const struct mach_header_64 *mh, intptr_t slide,
         || !np_webui_register_route(ROUTE_APPLY_TOOL_DEFAULTS, specify_request, specify_response,
                                     apply_tool_defaults))
         NP_WARN("compatsvc: the Settings page cannot save default compatibility settings");
+
+    if (!np_webui_register_route(ROUTE_SET_PLUGIN_DEFAULTS, specify_request,
+                                 specify_response, set_plugin_defaults))
+        NP_WARN("compatsvc: the Settings page cannot save global plugin defaults");
 
     g_routes = NP_COMPATSVC_READY;
 

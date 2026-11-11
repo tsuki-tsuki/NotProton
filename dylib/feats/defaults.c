@@ -1,4 +1,5 @@
 #include "defaults.h"
+#include "conf.h"
 #include "../util/buildid.h"
 #include "../util/file.h"
 #include "../util/log.h"
@@ -279,6 +280,72 @@ int np_defaults_save_build(const char *build, uint32_t runner, const char *text)
     char path[PATH_MAX];
     build_path(path, sizeof path, build, runner);
     return save_file(path, runner, text);
+}
+
+static void plugin_defaults_path(char *path, size_t size) {
+    const char *home = np_home_dir();
+    np_support_path(path, size, home ? home : "", "defaults-plugins");
+}
+
+static int plugin_defaults_body(const char *text, size_t len, np_text_t *out) {
+    static const char prefix[] = "NOTPROTON_";
+    if (len > NP_PLUGIN_DEFAULTS_TEXT_MAX) return 0;
+    while (len) {
+        const char *nl = memchr(text, '\n', len);
+        size_t n = nl ? (size_t)(nl - text) : len;
+        if (n) {
+            size_t prefix_len = sizeof prefix - 1;
+            if (n <= prefix_len + 2 || n - 2 >= NP_CONF_ID_MAX ||
+                memcmp(text, prefix, prefix_len) || memcmp(text + n - 2, "=1", 2))
+                return 0;
+            for (size_t i = prefix_len; i < n - 2; i++)
+                if (!((text[i] >= 'A' && text[i] <= 'Z') ||
+                      (text[i] >= '0' && text[i] <= '9') || text[i] == '_'))
+                    return 0;
+            put(out, text, n);
+            put(out, "\n", 1);
+        }
+        n += nl != NULL;
+        text += n;
+        len -= n;
+    }
+    return out->ok;
+}
+
+int np_defaults_save_plugins(const char *text) {
+    char path[PATH_MAX], body[NP_PLUGIN_DEFAULTS_TEXT_MAX + 1] = "";
+    np_text_t out = { body, sizeof body, 0, 1 };
+    if (!text || !plugin_defaults_body(text, strlen(text), &out)) return 0;
+    plugin_defaults_path(path, sizeof path);
+    pthread_mutex_lock(&g_save_lock);
+    int ok = write_locked(path, body, out.len);
+    pthread_mutex_unlock(&g_save_lock);
+    return ok;
+}
+
+int np_defaults_read_plugins(char *out, size_t size) {
+    if (!size) return 0;
+    out[0] = '\0';
+    char path[PATH_MAX], body[NP_PLUGIN_DEFAULTS_TEXT_MAX + 1];
+    plugin_defaults_path(path, sizeof path);
+    int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+    if (fd < 0) return errno == ENOENT;
+    struct stat st;
+    if (fstat(fd, &st) || !S_ISREG(st.st_mode)) {
+        close(fd);
+        return 0;
+    }
+    FILE *file = fdopen(fd, "r");
+    if (!file) {
+        close(fd);
+        return 0;
+    }
+    size_t len = fread(body, 1, sizeof body, file);
+    np_text_t parsed = { out, size, 0, 1 };
+    int ok = !ferror(file) && plugin_defaults_body(body, len, &parsed);
+    fclose(file);
+    if (!ok) out[0] = '\0';
+    return ok;
 }
 
 static int is_regular(const char *path) {

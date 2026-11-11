@@ -78,6 +78,46 @@ function openPage(form, builds, { tool, reply, data, lang } = {}) {
   return { g, h, sent, r: () => h.render(page) };
 }
 
+async function pluginCases() {
+  const t = runner('global plugin defaults');
+  const globals = globalsWith(SAVED);
+  globals.MSCXPluginDefaultsData = {};
+  globals.MSCXBuilds = BUILDS;
+  const h = hooks();
+  const sent = connect(globals, h);
+  const feats = JSON.stringify([
+    { k: 'NOTPROTON_EXAMPLE', l: 'Example plugin', on: 'yes', off: '' },
+    { k: 'NOTPROTON_CHILD', l: 'Child option', on: '1', off: '', dep: 'NOTPROTON_EXAMPLE' },
+    { k: 'NOTPROTON_VALUE', l: 'Typed option', ty: 'choice', ch: [{ v: 'on', l: 'On' }] },
+  ]);
+  const { defaultsPage, render, written } = panel(emit, 'statement', globals, { feats });
+  let settings = h.render(defaultsPage);
+  const toggle = settings.find(x => x.type === 'ToggleField' && x.props.label === 'Example plugin');
+  t.ok(toggle && !toggle.props.checked, 'a plugin starts disabled globally');
+  t.ok(!settings.some(x => ['Child option', 'Typed option'].includes(x.props.label)),
+       'the global page only offers top-level toggle plugins');
+  toggle.props.onChange(true);
+  await settle();
+  t.ok(sent[0]?.route === 'NotProton.SetPluginDefaults#1' && sent[0]?.text === 'NOTPROTON_EXAMPLE=1',
+       'the settings page saves a global enable independently of the selected runner');
+  const game = options => walk(render({ details: details(options) }));
+  const plugin = options => game(options).find(x => x.type === 'Dropdown' && x.props.label === 'Example plugin');
+  const inherit = plugin('');
+  t.ok(inherit?.props.selectedOption === '' &&
+       game('').some(x => x.props.label === 'Child option'), 'a game inherits the enabled plugin');
+  inherit.props.onChange({ data: 'off' });
+  t.ok(written.at(-1).opts.startsWith('NOTPROTON_EXAMPLE=0 '), 'Off writes an explicit override');
+  const off = plugin('NOTPROTON_EXAMPLE=0 %command%');
+  t.ok(off?.props.selectedOption === 'off' &&
+       !game('NOTPROTON_EXAMPLE=0 %command%').some(x => x.props.label === 'Child option'),
+       'explicit Off suppresses the inherited plugin and its child');
+  off.props.onChange({ data: '' });
+  t.ok(!written.at(-1).opts.includes('NOTPROTON_EXAMPLE'), 'Use global default removes the override');
+  t.ok(plugin('NOTPROTON_EXAMPLE=yes %command%')?.props.selectedOption === 'on',
+       'the descriptor on value remains an explicit On');
+  return t.failed;
+}
+
 function oneKindCases(form) {
   const t = runner(form + ' one kind');
   if (form === 'component') return t.failed;
@@ -485,7 +525,8 @@ for (const form of Object.keys(FORMS)) {
 return failed;
 }
 
-main().then(failed => {
+main().then(async ordinary => {
+  const failed = ordinary + await pluginCases();
   console.log(failed ? `\n${failed} failure(s)` : '\ndefaults pass in both shapes');
   process.exit(failed ? 1 : 0);
 }, e => { console.error(e); process.exit(1); });

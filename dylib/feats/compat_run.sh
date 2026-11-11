@@ -3115,15 +3115,32 @@ np_feat_requires() {
 np_feat_installed() {
   [ -z "$(np_feat_first "$1" requires)" ] || [ -n "$(np_feat_requires "$1")" ]
 }
+# Match the native reader: an unreadable or malformed file contributes no defaults.
+np_plugin_defaults=""
+if [ -f "$np_support/defaults-plugins" ]; then
+  np_plugin_defaults=$(LC_ALL=C awk '
+    { bytes += length($0) + 1; if (bytes > 8192) exit 1 }
+    /^$/ { next }
+    /^NOTPROTON_[A-Z0-9_]+=1$/ && length($0) < 194 { print; next }
+    { exit 1 }
+  ' "$np_support/defaults-plugins") || np_plugin_defaults=""
+fi
+
 np_feat_switched() {
   eval "np_feat_sv=\${$1-}"
+  eval "np_feat_explicit=\${$1+x}"
   if [ -n "$(np_feat_first "$1" type)" ]; then
     # shellcheck disable=SC2154 # eval assigns np_feat_sv above
     [ -n "$np_feat_sv" ]
     return
   fi
   np_feat_son=$(np_feat_first "$1" on)
-  [ "$np_feat_sv" = "${np_feat_son:-1}" ]
+  if [ "$np_feat_explicit" = x ]; then
+    [ "$np_feat_sv" = "${np_feat_son:-1}" ]
+  else
+    [ -n "$np_plugin_defaults" ] && [ -z "$(np_feat_first "$1" depends)" ] &&
+      printf '%s\n' "$np_plugin_defaults" | LC_ALL=C grep -Fqx -- "$1=1"
+  fi
 }
 # A plugin may name the tools it is for, as a name or a name ending in "*". Naming none
 # means every tool, which is what nearly all of them want.

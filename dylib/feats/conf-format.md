@@ -101,6 +101,19 @@ A row with a `type` is on while it holds a value. On Default, which for a slider
 `default`, it writes nothing, so its `inject`, `env`, `stage` and `overrides` do not apply
 and the rows that depend on it are hidden.
 
+### Global plugin defaults
+
+Steam's Compatibility settings can enable an installed top-level toggle for all
+games using NotProton. This applies across runner versions. Tool filters,
+required files, and per-game dependencies still apply. Dependent rows and
+choice or slider settings remain per-game.
+
+On a game using a globally enabled plugin, its Developer row offers **Use global
+default (On)**, **On**, and **Off**. Using the global default removes the plugin's
+launch option. An explicit value always takes precedence, including a legacy
+value that differs from the descriptor's `on` value. The global switches are
+stored separately from runner defaults.
+
 ## Variant fields
 
 | field | repeat | required | value |
