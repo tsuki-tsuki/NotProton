@@ -96,15 +96,27 @@ async function pluginCases() {
   t.ok(toggle && !toggle.props.checked, 'a plugin starts disabled globally');
   t.ok(!settings.some(x => ['Child option', 'Typed option'].includes(x.props.label)),
        'the global page only offers top-level toggle plugins');
+  const game = options => walk(render({ details: details(options) }));
+  const plugin = options => game(options).find(x => x.type === 'Dropdown' && x.props.label === 'Example plugin');
+  const initiallyOff = plugin('');
+  t.ok(initiallyOff?.props.selectedOption === '' &&
+       initiallyOff?.props.rgOptions[0].label === 'Use global default (Off)' &&
+       !game('').some(x => x.props.label === 'Child option'), 'a game inherits the disabled plugin');
+  t.ok(initiallyOff?.props.rgOptions.slice(1).map(x => x.label).join(', ') === 'Always On, Always Off',
+       'the per-game choices describe persistent overrides');
+  initiallyOff?.props.onChange({ data: 'off' });
+  const pinnedOff = written.at(-1)?.opts;
+  t.ok(pinnedOff?.startsWith('NOTPROTON_EXAMPLE=0 '), 'a game can pin Off while the global default is Off');
   toggle.props.onChange(true);
   await settle();
   t.ok(sent[0]?.route === 'NotProton.SetPluginDefaults#1' && sent[0]?.text === 'NOTPROTON_EXAMPLE=1',
        'the settings page saves a global enable independently of the selected runner');
-  const game = options => walk(render({ details: details(options) }));
-  const plugin = options => game(options).find(x => x.type === 'Dropdown' && x.props.label === 'Example plugin');
   const inherit = plugin('');
   t.ok(inherit?.props.selectedOption === '' &&
+       inherit?.props.rgOptions[0].label === 'Use global default (On)' &&
        game('').some(x => x.props.label === 'Child option'), 'a game inherits the enabled plugin');
+  t.ok(pinnedOff && plugin(pinnedOff)?.props.selectedOption === 'off' &&
+       !game(pinnedOff).some(x => x.props.label === 'Child option'), 'a pinned game stays Off after global enable');
   inherit.props.onChange({ data: 'off' });
   t.ok(written.at(-1).opts.startsWith('NOTPROTON_EXAMPLE=0 '), 'Off writes an explicit override');
   const off = plugin('NOTPROTON_EXAMPLE=0 %command%');
@@ -115,6 +127,13 @@ async function pluginCases() {
   t.ok(!written.at(-1).opts.includes('NOTPROTON_EXAMPLE'), 'Use global default removes the override');
   t.ok(plugin('NOTPROTON_EXAMPLE=yes %command%')?.props.selectedOption === 'on',
        'the descriptor on value remains an explicit On');
+  inherit?.props.onChange({ data: 'on' });
+  const pinnedOn = written.at(-1)?.opts;
+  const enabledToggle = h.render(defaultsPage).find(x => x.type === 'ToggleField' && x.props.label === 'Example plugin');
+  enabledToggle.props.onChange(false);
+  await settle();
+  t.ok(pinnedOn && plugin(pinnedOn)?.props.selectedOption === 'on' &&
+       game(pinnedOn).some(x => x.props.label === 'Child option'), 'a pinned game stays On after global disable');
   return t.failed;
 }
 

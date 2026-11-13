@@ -1244,8 +1244,9 @@ static int out_expand(np_out_t *o, const char *replace, const np_cap_t *caps) {
     "npFor=p=>\"*\"===p.slice(-1)?npTool.startsWith(p.slice(0,-1)):p===npTool," \
     "MSCXReady=" NP_READY ",MSCXFeat=(" NP_FEATS ").filter(f=>!f.tl||f.tl.some(npFor))," \
     "npCx=ours&&!MSCXFeat.some(f=>f.hc),MSCXVar=" NP_VARS ",PG=" NP_CX_PLUGIN_DEFAULTS "," \
-    "pluginGlobal=f=>!f.dep&&PG?.[f.k]===\"1\"," \
-    "pv=f=>hasSaved(f.k)?readSaved(f.k):pluginGlobal(f)?f.on:G(f.k)," \
+    "inheritsPlugin=f=>!!PG&&!f.dep&&!f.ty," \
+    "pluginGlobal=f=>PG?.[f.k]===\"1\"," \
+    "pv=f=>hasSaved(f.k)?readSaved(f.k):inheritsPlugin(f)?(pluginGlobal(f)?f.on:\"\"):G(f.k)," \
     /* A toggle parent is satisfied by its on value; one that holds a value, such as a
        dropdown or a slider, by holding one at all rather than sitting on Default. */ \
     "on1=(k,n=0)=>{const p=MSCXFeat.find(x=>x.k===k);" \
@@ -1289,10 +1290,12 @@ static int out_expand(np_out_t *o, const char *replace, const np_cap_t *caps) {
     "TD=(f,d,lv)=>{const {k,l,on,off}=f,rd=MSCXReady[k]!==0," \
     "label=rd?l:l+npL(\" (Not Installed)\",\" (未安装)\",\" (Not Installed)\")," \
     "description=d||undefined,indentLevel=lv||undefined;" \
-    "if(pluginGlobal(f)){const v=readSaved(k),disable=off&&off!==on?off:on===\"0\"?\"1\":\"0\";" \
+    "if(inheritsPlugin(f)){const v=readSaved(k),disable=off&&off!==on?off:on===\"0\"?\"1\":\"0\";" \
     "return(0," RT ".jsx)(" BARREL ".m,{label,description,indentLevel,disabled:!rd,layout:\"inline\"," \
-    "rgOptions:[{data:\"\",label:npL(\"Use global default (On)\",\"使用全局默认（开启）\",\"Usa predefinita globale (Attivo)\")}," \
-    "{data:\"on\",label:npL(\"On\",\"开启\",\"Attivo\")},{data:\"off\",label:npL(\"Off\",\"关闭\",\"Disattivato\")}]," \
+    "rgOptions:[{data:\"\",label:pluginGlobal(f)?npL(\"Use global default (On)\",\"使用全局默认（开启）\",\"Usa predefinita globale (Attivo)\"):" \
+    "npL(\"Use global default (Off)\",\"使用全局默认（关闭）\",\"Usa predefinita globale (Disattivato)\")}," \
+    "{data:\"on\",label:npL(\"Always On\",\"始终开启\",\"Sempre attivo\")}," \
+    "{data:\"off\",label:npL(\"Always Off\",\"始终关闭\",\"Sempre disattivato\")}]," \
     "selectedOption:hasSaved(k)?v===on?\"on\":\"off\":\"\",onChange:x=>s([[k,x.data===\"on\"?on:x.data===\"off\"?disable:\"\"]])},k)}" \
     "return(0," RT ".jsx)(" BARREL ".y4,{label,description,indentLevel,disabled:!rd," \
     "checked:rd&&pv(f)===on,onChange:v=>s([[k,v?on:(off||\"\")]])},k)}," \
