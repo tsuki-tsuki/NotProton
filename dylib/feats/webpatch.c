@@ -600,6 +600,9 @@ static int feat_rows(const char *home, char **ready_out, char **rows_out) {
         if (np_conf_get(rec, "group")) {
             if (!out_put(&rows, ",gr:", 4) || !out_jsstr(&rows, np_conf_get(rec, "group"))) goto done;
         }
+        if (np_conf_get(rec, "context")) {
+            if (!out_put(&rows, ",cx:", 4) || !out_jsstr(&rows, np_conf_get(rec, "context"))) goto done;
+        }
         if (!feat_put_list(&rows, ",dn:[", rec, "description_on")) goto done;
         if (!feat_put_env(&rows, rec, home)) goto done;
         if (!feat_put_list(&rows, ",tl:[", rec, "tools")) goto done;
@@ -613,7 +616,8 @@ static int feat_rows(const char *home, char **ready_out, char **rows_out) {
             if (!out_put(&rows, ",rq:", 4) || !out_jsstr(&rows, resolved)) goto done;
         }
         if ((np_conf_get(rec, "stage") || np_conf_get(rec, "overrides") || np_conf_get(rec, "patch")
-             || np_conf_get(rec, "variants"))
+             || np_conf_get(rec, "variants") || np_conf_get(rec, "context")
+             || (type && strcmp(type, "graphics_backend") == 0))
             && !out_put(&rows, ",rn:1", 5)) goto done;
         if (np_conf_get(rec, "hide_crossover") && !out_put(&rows, ",hc:1", 5)) goto done;
         if (type) {
@@ -1260,14 +1264,15 @@ static int out_expand(np_out_t *o, const char *replace, const np_cap_t *caps) {
 #define NP_CX_TARGET \
     "(o,id,home)=>{" \
     "const q=v=>\"'\"+v.replace(/'/g,\"'\\\\''\").replace(/%(?=command%)/gi,\"%'\\\"\\\"'\")+\"'\"," \
-    "h=\"sh -c \"+q('exe=$1 dir=$2 found= prev=; shift 2; for arg in \"$@\"; do shift; '+" \
+    "legacy=\"sh -c \"+q('exe=$1 dir=$2 found= prev=; shift 2; for arg in \"$@\"; do shift; '+" \
     "'if [ -z \"$found\" ] && [ \"$prev\" = waitforexitandrun ]; then arg=$exe found=1; fi; prev=$arg; set -- \"$@\" \"$arg\"; done; '+" \
     "'if [ \"$found\" ]; then cd \"${dir:-${exe%/*}/}\" || exit; fi; exec \"$@\"')+\" sh \"," \
-    "at=o.indexOf(h)," \
-    "m=at<0?null:/^('(?:[^']|'\\\\''|'\"\"')*') ('(?:[^']|'\\\\''|'\"\"')*') %command%/.exec(o.slice(at+h.length))," \
+    "h=legacy.replace('; fi; exec ', '; export NOTPROTON_LAUNCH_EXECUTABLE=\"$exe\"; fi; exec ')," \
+    "matched=[h,legacy].find(x=>o.includes(x))||h,at=o.indexOf(matched)," \
+    "m=at<0?null:/^('(?:[^']|'\\\\''|'\"\"')*') ('(?:[^']|'\\\\''|'\"\"')*') %command%/.exec(o.slice(at+matched.length))," \
     "rd=v=>v.slice(1,-1).replace(/'\\\\''|'\"\"'/g,x=>x[1]===\"\\\\\"?\"'\":\"\")," \
-    "b=m?o.slice(0,at)+\"%command%\"+o.slice(at+h.length+m[0].length):o;" \
-    "return{home,ex:m?rd(m[1]):\"\",sd:m?rd(m[2]):\"\",write:(e,d)=>{" \
+    "b=m?o.slice(0,at)+\"%command%\"+o.slice(at+matched.length+m[0].length):o;" \
+    "return{upgrade:()=>m?o.slice(0,at)+h+o.slice(at+matched.length):o,home,ex:m?rd(m[1]):\"\",sd:m?rd(m[2]):\"\",write:(e,d)=>{" \
     "const B=/%command%/i.test(b)?b:\"%command%\"+(b.trim()?\" \"+b:\"\"),c=MSCXLaunch(B,id).c;" \
     "if(!c||!/^%command%$/i.test(B.slice(c.start,c.end)))return;" \
     "const r=B.slice(0,c.start)+(e?h+q(e)+\" \"+q(d)+\" %command%\":\"%command%\")+B.slice(c.end);" \
@@ -1436,7 +1441,7 @@ static int out_expand(np_out_t *o, const char *replace, const np_cap_t *caps) {
     "npTool=tool||\"\"," \
     "npFor=p=>\"*\"===p.slice(-1)?npTool.startsWith(p.slice(0,-1)):p===npTool," \
     "npLv=globalThis.MSCXLive,MSCXReady=npLv?npLv.r:" NP_READY ",MSCXFeat=(npLv?npLv.f:" NP_FEATS ").filter(f=>(!f.tl||f.tl.some(npFor))" \
-    "&&(!f.ap||!app||" NP_CX_SHOW_ALL "||f.ap.includes(String(app))))," \
+    "&&((!f.cx&&f.ty!==\"graphics_backend\")||!!app)&&(!f.ap||!app||" NP_CX_SHOW_ALL "||f.ap.includes(String(app))))," \
     "npCx=ours&&!MSCXFeat.some(f=>f.hc),MSCXVar=npLv?npLv.v:" NP_VARS "," \
     "npRd=k=>{const f=MSCXFeat.find(x=>x.k===k);" \
     "return MSCXReady[k]!==0&&!(f&&f.va&&f.va.some(x=>!MSCXVar.some(v=>v.k===x&&v.t.indexOf(npTool)>=0)))}," \
@@ -1599,6 +1604,9 @@ static int out_expand(np_out_t *o, const char *replace, const np_cap_t *caps) {
     ".concat(ln.map((x,i)=>(0," RT ".jsx)(\"div\"," \
     "{className:\"MSCXKeys\",children:x},i)))}):f.d;" \
     "const kk=npKey(f),pe=ours?0:1;" \
+    "if(f.ty===\"graphics_backend\"){const rd=npRd(f.k),enabled=rd&&(!f.cx||!!(X&&/\\.exe$/i.test(X.ex))),v=G(kk);" \
+    "return(0," RT ".jsx)(" BARREL ".m,{label:f.l,description:d,layout:\"inline\",disabled:!enabled," \
+    "rgOptions:B,selectedOption:enabled&&B.some(x=>x.data===v)?v:\"\",onChange:x=>{if(enabled)s([[kk,x.data]])}},f.k)}" \
     "return!ours&&!f.ty?TP(f,d,lv)" \
     ":\"choice\"===f.ty?TC(kk,f.l,d,lv,f.ch,pe)" \
     ":\"slider\"===f.ty?(f.ch?TL(kk,f.l,d,lv,f.ch,f.df,pe)" \
@@ -1707,7 +1715,8 @@ static int out_expand(np_out_t *o, const char *replace, const np_cap_t *caps) {
     "np=>{" \
     "const t=np.details,o=t.strLaunchOptions||\"\",tn=t.strCompatToolName||\"" NP_FALLBACK_TOOL "\"," \
     "fex=" NP_FEX_TOOLS ".indexOf(tn)>=0,ot=" NP_OUR_TOOLS ".find(x=>x[0]===tn)," \
-    "L=MSCXLaunch(o,t.unAppID),g=L.g,has=k=>L.k.includes(k)," \
+    "X=(" NP_CX_TARGET ")(o,t.unAppID,t.strInstallFolder||\"\")," \
+    "L=MSCXLaunch(X.upgrade(),t.unAppID),g=L.g,has=k=>L.k.includes(k)," \
     "lost=globalThis.MSCXDefaultsLost,DF=lost||!(tn===\"" NP_FALLBACK_TOOL "\"||ot)?{}:(" NP_CX_BUILDS ".find(x=>x.id===tn)" \
     "||ot&&" NP_CX_BUILDS ".find(x=>x.build===ot[1]&&x.runner===(fex?\"fex\":\"rosetta\"))" \
     "||{}).override||" NP_CX_DEFAULTS "[fex?\"fex\":\"rosetta\"]||{}," \
@@ -1720,7 +1729,7 @@ static int out_expand(np_out_t *o, const char *replace, const np_cap_t *caps) {
     "&&!t.strCompatToolName)return null;" \
     "return MSCXPanel({fex,get:G,saved:g,set:L.s,clearUnused:1,dev:1,tool:tn,app:t.unAppID," \
     "ours:tn===\"" NP_FALLBACK_TOOL "\"||!!ot," \
-    "dflt:lost?null:k=>DF[k],target:(" NP_CX_TARGET ")(o,t.unAppID,t.strInstallFolder||\"\"),head:" \
+    "dflt:lost?null:k=>DF[k],target:X,head:" \
     "typeof MSCXPrefixRow==\"function\"&&(0," RT ".jsx)(\"div\",{className:\"MSCXRow\",ref:e=>e&&MSCXPrefixRow(e,t.unAppID)},\"npstate\")" \
     "})}"
 

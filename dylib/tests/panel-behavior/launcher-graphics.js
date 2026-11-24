@@ -1,0 +1,33 @@
+'use strict';
+const assert = require('assert');
+const { panel, walk, details, FORMS } = require('./harness');
+const emit = process.argv[2];
+const feats = '[{k:"NOTPROTON_LAUNCHER_GRAPHICS",l:"Launcher Graphics Backend",ty:"graphics_backend",cx:"launch_executable",on:"1",off:""}]';
+for (const form of Object.keys(FORMS)) {
+ const make=(opts,tool='notproton')=>{const p=panel(emit,form,undefined,{feats,fexTools:["notproton-fex"]});return {p,n:walk(p.render({details:details(opts,{strCompatToolName:tool})}))};};
+ let v=make('');let d=v.n.find(n=>n.type==='Dropdown'&&n.props.label==='Launcher Graphics Backend');
+ assert(d&&d.props.disabled,'disabled without launch executable');
+ const b=v.n.find(n=>n.type==='Button'&&n.props.children==='Browse...');
+ v.p.files.push("/Games/Mod's Launcher.exe"); b.props.onClick();const opts=v.p.written.at(-1).opts;
+ v=make(opts);d=v.n.find(n=>n.type==='Dropdown'&&n.props.label==='Launcher Graphics Backend');
+ assert(d&&!d.props.disabled,'enabled with launch executable');
+ assert.deepEqual(d.props.rgOptions.map(x=>x.data),['','d3dmetal','dxmt','dxvk','wined3d']);
+ assert.equal(d.props.rgOptions[0].label,'Automatic');
+ d.props.onChange({data:'dxmt'});assert(v.p.written.at(-1).opts.includes('NOTPROTON_LAUNCHER_GRAPHICS=dxmt'));
+ v=make('NOTPROTON_LAUNCHER_GRAPHICS=dxmt %command%');
+ d=v.n.find(n=>n.type==='Dropdown'&&n.props.label==='Launcher Graphics Backend');
+ assert(d.props.disabled,'removing executable disables saved override');
+ assert.equal(d.props.selectedOption,'');
+ const global=panel(emit,form,undefined,{feats:feats.replace(',cx:"launch_executable"','')});
+ assert(!walk(global.render({details:details('',{unAppID:0})})).some(n=>n.props.label==='Launcher Graphics Backend'),'backend type is always per game');
+ v=make(opts.replace(/Launcher\.exe/g,'Launcher.bat'));
+ d=v.n.find(n=>n.type==='Dropdown'&&n.props.label==='Launcher Graphics Backend');
+ assert(d.props.disabled,'batch scripts do not identify a Windows process image');
+ const legacy=opts.replace('; export NOTPROTON_LAUNCH_EXECUTABLE="$exe"; fi; exec ', '; fi; exec ');
+ v=make(legacy);d=v.n.find(n=>n.type==='Dropdown'&&n.props.label==='Launcher Graphics Backend');
+ d.props.onChange({data:'dxmt'});
+ assert(v.p.written.at(-1).opts.includes('export NOTPROTON_LAUNCH_EXECUTABLE='),'upgrades legacy wrapper when setting backend');
+ v=make(opts,'notproton-fex');d=v.n.find(n=>n.type==='Dropdown'&&n.props.label==='Launcher Graphics Backend');
+ assert(!d.props.rgOptions.some(x=>x.data==='d3dmetal'));
+}
+console.log('launcher graphics panel checks passed');

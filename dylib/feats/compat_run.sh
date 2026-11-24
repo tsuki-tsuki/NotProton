@@ -456,6 +456,7 @@ NP_CONF_NAMES
       return ""
     }
     for (i = 1; i <= nkv; i++) {
+      if (names[i] == "context" && vals[i] != "launch_executable") { detail = "context"; return "bad-value" }
       if (names[i] == "env" && !envok(vals[i])) { detail = "env"; return "bad-value" }
       if (names[i] == "choice" && choiceval(vals[i]) == "") { detail = "choice"; return "bad-value" }
       if (names[i] == "tools" && !toolok(vals[i])) { detail = "tools"; return "bad-value" }
@@ -477,6 +478,10 @@ NP_CONF_NAMES
     t = first["type"]
     values = ("choice" in cnt) ? cnt["choice"] : 0
     mn = ("min" in cnt); mx = ("max" in cnt); st = ("step" in cnt); df = ("default" in cnt)
+    if (t == "graphics_backend") {
+      if (values || mn || mx || st || df) { detail = "graphics_backend"; return "bad-value" }
+      return ""
+    }
     if (t == "choice") {
       if (!values) { detail = "choice"; return "missing-required" }
       return ""
@@ -525,8 +530,8 @@ NP_CONF_NAMES
   BEGIN {
     nkv = 0; records = 0; id = ""; code = ""; detail = ""
     if (kind == "plugin") {
-      split("label description description_on section on off depends requires inject env overrides stage tools type choice min max step default suffix hide_crossover apps patch variants group improves needed_for", f, " ")
-      split("1 1 16 1 1 1 1 4 1 16 1 1 8 1 16 1 1 1 1 1 1 16 16 8 1 16 16", m, " ")
+      split("label description description_on section on off depends requires inject env overrides stage tools type choice min max step default suffix hide_crossover apps patch variants group improves needed_for context", f, " ")
+      split("1 1 16 1 1 1 1 4 1 16 1 1 8 1 16 1 1 1 1 1 1 16 16 8 1 16 16 1", m, " ")
       split("label", req, " "); nreq = 1
     } else {
       split("label variant src dst build remove apps", f, " ")
@@ -1236,7 +1241,17 @@ np_feat_installed() {
     ! np_feat_bad_variant "$1"
 }
 np_feat_switched() {
+  if [ "$(np_feat_first "$1" context)" = launch_executable ]; then
+    [ -n "${NOTPROTON_LAUNCH_EXECUTABLE:-}" ] || return 1
+  fi
   eval "np_feat_sv=\${$1-}"
+  if [ "$(np_feat_first "$1" type)" = graphics_backend ]; then
+    case "$np_feat_sv" in
+      dxmt|dxvk|wined3d) return 0 ;;
+      d3dmetal) [ "${wine_unix##*/}" = x86_64-unix ]; return ;;
+      *) return 1 ;;
+    esac
+  fi
   if [ -n "$(np_feat_first "$1" type)" ]; then
     # shellcheck disable=SC2154 # eval assigns np_feat_sv above
     [ -n "$np_feat_sv" ]
@@ -3368,6 +3383,12 @@ while IFS= read -r np_feat_key; do
   np_feat_active "$np_feat_key" 0 || continue
 
   if [ "$(np_feat_first "$np_feat_key" inject)" = 1 ]; then
+    # Injected backend plugins consume their validated per-game choice in the Wine process.
+    if [ "$(np_feat_first "$np_feat_key" type)" = graphics_backend ]; then
+      eval "np_feat_setting=\${$np_feat_key-}"
+      np_feat_envs="$np_feat_key=$np_feat_setting
+$np_feat_envs"
+    fi
     np_feat_lib=$(np_feat_requires "$np_feat_key")
     if [ ! -f "$np_feat_lib" ]; then
       np_feat_log "$np_feat_key is skipped as it asks to load a dylib but doesn't name one"
@@ -3641,6 +3662,7 @@ NP_FEAT_ENVS
     --env STEAM_COMPAT_CLIENT_INSTALL_PATH="$STEAM_COMPAT_CLIENT_INSTALL_PATH" \
     --env STEAM_COMPAT_APP_ID="$STEAM_COMPAT_APP_ID" \
     --env STEAM_DYLD_INSERT_LIBRARIES="$STEAM_DYLD_INSERT_LIBRARIES" \
+    --env NOTPROTON_LAUNCH_EXECUTABLE="${NOTPROTON_LAUNCH_EXECUTABLE:-}" \
     --env NOTPROTON_FEATURE_DYLIBS="$np_feat_dylibs" \
     --env NOTPROTON_GAME_CWD="$game_cwd" "$@"
   np_started=$(date +%s)

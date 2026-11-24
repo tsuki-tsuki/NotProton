@@ -425,5 +425,23 @@ out=$(run NOTPROTON_VARFEAT=1 NP_TEST_VARIANTS=headset)
 ok "usable variant stages" "$(cat "$sys32/d3d11.dll")|$(line "$out" 1)" \
    "ours|steamclient=n;lsteamclient=b;d3d11=n"
 
+reset
+conf 50-graphics.conf <<EOF
+[NOTPROTON_GRAPHICS]
+label = Launcher Graphics
+type = graphics_backend
+context = launch_executable
+inject = 1
+requires = $work/lib/feat.dylib
+EOF
+out=$(run NOTPROTON_GRAPHICS=dxmt)
+ok "missing launch context injects nothing" "$(line "$out" 2)" ""
+out=$(run NOTPROTON_GRAPHICS=dxmt NOTPROTON_LAUNCH_EXECUTABLE="/Games/Mod's Launcher.exe")
+ok "typed injection gets its choice" "$(line "$out" 3)" "NOTPROTON_GRAPHICS=dxmt"
+out=$(run NOTPROTON_GRAPHICS=auto NOTPROTON_LAUNCH_EXECUTABLE=/game.exe)
+ok "Automatic injects nothing" "$(line "$out" 2)" ""
+out=$(run NOTPROTON_GRAPHICS=d3dmetal NOTPROTON_LAUNCH_EXECUTABLE=/game.exe wine_unix="$work/aarch64-unix")
+ok "unsupported FEX backend injects nothing" "$(line "$out" 2)" ""
+
 [ "$fail" -eq 0 ] || exit 1
 echo "==> featstagecheck: plugins stage into the prefix and extend the overrides"

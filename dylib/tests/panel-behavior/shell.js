@@ -21,7 +21,7 @@ const ON_UNLESS_0 = { ROSETTA_ADVERTISE_AVX: true };
 const PANEL_KEYS = ['CX_GRAPHICS_BACKEND', 'MTL_HUD_ENABLED', 'D3DM_ENABLE_METALFX', 'DXMT_ENABLE_NVEXT',
   'DXMT_METALFX_SPATIAL_SWAPCHAIN', 'DXMT_CONFIG', 'ROSETTA_ADVERTISE_AVX', 'WINEMSYNC', 'NOTPROTON_RETINA',
   'NOTPROTON_RAW_CONTROLLERS', 'NOTPROTON_DISABLE_HIDRAW'];
-const OTHER_KEYS = ['WINEDEBUG', 'DXVK_HUD', 'FOO', 'SteamAppId', 'STEAM_COMPAT_DATA_PATH'];
+const OTHER_KEYS = ['NOTPROTON_LAUNCH_EXECUTABLE', 'WINEDEBUG', 'DXVK_HUD', 'FOO', 'SteamAppId', 'STEAM_COMPAT_DATA_PATH'];
 
 const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'np-shell-')));
 fs.writeFileSync(path.join(dir, 'gamemoderun'), '#!/bin/sh\nexec "$@"\n', { mode: 0o755 });
@@ -295,6 +295,7 @@ for (const shell of shells) {
         t.ok(v.dialogs[0].bChooseDirectory === true && v.dialogs[0].strInitialFile === folder,
              `${what}: the start folder dialog opens on the program's folder`);
         const dirRun = launch(shell, withDir);
+        t.ok(dirRun.length && dirRun[0].env.NOTPROTON_LAUNCH_EXECUTABLE === exe, `${what}: exports the exact executable context`);
         t.ok(dirRun.length && dirRun[0].cwd === startDir && dirRun[0].argv[1] === exe, `${what}: the start folder is used and the pick kept`);
         v = view(form, withDir);
         t.ok(v.target.props.description === exe && v.start.props.description === startDir &&

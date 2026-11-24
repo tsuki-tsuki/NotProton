@@ -115,6 +115,11 @@ int main(void) {
     }
     setenv("HOME", g_home, 1);
 
+    write_desc("10-context.conf", "[NOTPROTON_LAUNCHER]\nlabel = Launcher\ntype = graphics_backend\ncontext = launch_executable\n");
+    ok(strstr(feats_json(), "cx:\"launch_executable\"") != NULL, "exports launch context metadata");
+    ok(strstr(feats_json(), "ty:\"graphics_backend\"") != NULL, "exports dynamic backend type");
+    clear_descs();
+
     puts("== an empty plugins folder");
     ok(strcmp(feats_json(), "[]") == 0, "renders no rows");
     ok(strcmp(ready_json(), "{}") == 0, "reports no readiness");

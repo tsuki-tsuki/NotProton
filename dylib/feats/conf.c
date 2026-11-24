@@ -23,7 +23,7 @@ static const np_conf_spec_t kPlugin[] = {
     { "max", 1, 0 },       { "step", 1, 0 },        { "default", 1, 0 },
     { "suffix", 1, 0 },    { "hide_crossover", 1, 0 }, { "apps", 16, 0 },
     { "patch", 16, 0 },    { "variants", 8, 0 },    { "group", 1, 0 },
-    { "improves", 16, 0 },  { "needed_for", 16, 0 },
+    { "context", 1, 0 }, { "improves", 16, 0 },  { "needed_for", 16, 0 },
     { NULL, 0, 0 }
 };
 
@@ -316,6 +316,9 @@ static const char *conf_schema(const np_conf_rec_t *rec, np_conf_kind kind,
     }
 
     while (np_conf_next(rec, &it, &n, &v)) {
+        if (strcmp(n, "context") == 0 && strcmp(v, "launch_executable") != 0) {
+            *detail = "context"; return NP_CONF_BAD_VALUE;
+        }
         if (strcmp(n, "env") == 0 && !conf_env_ok(v)) {
             *detail = "env";
             return NP_CONF_BAD_VALUE;
@@ -385,6 +388,10 @@ static const char *conf_schema(const np_conf_rec_t *rec, np_conf_kind kind,
     step = np_conf_get(rec, "step");
     dflt = np_conf_get(rec, "default");
 
+    if (strcmp(type, "graphics_backend") == 0) {
+        if (values || mn || mx || step || dflt) { *detail = "graphics_backend"; return NP_CONF_BAD_VALUE; }
+        return NULL;
+    }
     if (strcmp(type, "choice") == 0) {
         if (!values) {
             *detail = "choice";

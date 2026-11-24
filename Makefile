@@ -74,7 +74,7 @@ DEPS := $(OBJS:.o=.d)
 
 .PHONY: all clean rebuild dobby deploy dylib dylib-install sigcheck fonts fonts-install app-payload app app-zip \
         anchorcheck callscheck sigdb-fixtures webpatch-fixtures peicon-fixtures ceg-check panel-behavior app-tests \
-        featcheck featstagecheck runnervariantcheck conf-fixtures confcheck \
+        featcheck featstagecheck runnervariantcheck conf-fixtures confcheck launcher-contextcheck \
         tests-list overlay-shim overlay-shim-install overlay-shim-tests \
         plugin-host plugin-host-install plugin-host-tests patchcheck npload \
         overlay-shim-bench iconmaker icon \
@@ -296,7 +296,10 @@ conf-fixtures:
 	n=$$(grep -c . $$tmp/got); rm -rf $$tmp; \
 	echo "==> conf fixtures: $$n normalised lines match EXPECTED"
 
-confcheck:
+launcher-contextcheck:
+	@sh dylib/tests/launcher-contextcheck.sh
+
+confcheck: launcher-contextcheck
 	@if [ ! -f dylib/tests/confcheck.sh ]; then \
 		$(call SKIP,confcheck,dylib/tests/confcheck.sh); exit 0; fi; \
 	sh dylib/tests/confcheck.sh dylib/feats/compat_run.sh $(CONF_FIXTURES)
@@ -491,7 +494,7 @@ app-tests:
 	cd app && swift test --manifest-cache none --no-parallel
 
 PANEL_TESTS := dylib/tests/panel-behavior
-PANEL_SCRIPTS := behavior switching launch-options shell migration localization fex prefix-row live defaults
+PANEL_SCRIPTS := launcher-graphics behavior switching launch-options shell migration localization fex prefix-row live defaults
 
 panel-behavior:
 	@if [ ! -d $(PANEL_TESTS) ]; then $(call SKIP,panel-behavior,$(PANEL_TESTS)); exit 0; fi; \
